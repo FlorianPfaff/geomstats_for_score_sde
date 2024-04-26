@@ -159,15 +159,25 @@ from . import fft
 
 from jax.numpy import array
 
-unsupported_functions = [
-    'convert_to_wider_dtype',
-    'get_default_dtype',
-    'get_default_cdtype',
-    'set_default_dtype',
-    'to_ndarray',
-]
-for func_name in unsupported_functions:
-    exec(f"{func_name} = lambda *args, **kwargs: NotImplementedError('This function is not supported in this JAX backend.')")
+
+def convert_to_wider_dtype(*args, **kwargs):
+    raise NotImplementedError("The function convert_to_wider_dtype is not supported in this JAX backend.")
+
+
+def get_default_dtype(*args, **kwargs):
+    raise NotImplementedError("The function get_default_dtype is not supported in this JAX backend.")
+
+
+def get_default_cdtype(*args, **kwargs):
+    raise NotImplementedError("The function get_default_cdtype is not supported in this JAX backend.")
+
+
+def set_default_dtype(*args, **kwargs):
+    raise NotImplementedError("The function set_default_dtype is not supported in this JAX backend.")
+
+
+def to_ndarray(*args, **kwargs):
+    raise NotImplementedError("The function to_ndarray is not supported in this JAX backend.")
 
 
 def assignment(x, values, indices, axis=0):
