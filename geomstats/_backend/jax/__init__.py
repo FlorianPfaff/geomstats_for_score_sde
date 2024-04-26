@@ -160,7 +160,6 @@ from . import fft
 from jax.numpy import array
 
 unsupported_functions = [
-    'array_from_sparse',
     'assignment',
     'assignment_by_sum',
     'convert_to_wider_dtype',
@@ -172,17 +171,57 @@ unsupported_functions = [
 for func_name in unsupported_functions:
     exec(f"{func_name} = lambda *args, **kwargs: NotImplementedError('This function is not supported in this JAX backend.')")
 
+
+def array_from_sparse(indices, data, target_shape):
+    """
+    Create an array of given shape, with values at specific indices.
+    The rest of the array will be filled with zeros.
+
+    Parameters
+    ----------
+    indices : iterable(tuple(int))
+        Index of each element which will be assigned a specific value.
+    data : iterable(scalar)
+        Value associated at each index.
+    target_shape : tuple(int)
+        Shape of the output array.
+
+    Returns
+    -------
+    a : array, shape=target_shape
+        Array of zeros with specified values assigned to specified indices.
+    """
+    # Convert inputs to JAX arrays if they aren't already
+    indices = _jnp.array(indices)
+    data = _jnp.array(data)
+    
+    # Create a dense array of zeros with the appropriate data type
+    out = _jnp.zeros(target_shape, dtype=data.dtype)
+    
+    # Compute linear indices from multi-dimensional indices
+    linear_indices = _jnp.ravel_multi_index(indices.T, target_shape)
+    
+    # Use JAX's indexing to place data into the output array
+    out = out.at[linear_indices].set(data)
+    
+    return out
+
+
 def is_complex(x):
     return _jnp.iscomplexobj(x)
+
 
 def cast(array, dtype):
     return _jnp.asarray(array, dtype=dtype)
 
+
 def ravel_tril_indices(n):
     return _jnp.tril_indices(n)
 
+
 def is_array(obj):
     return isinstance(obj, _jnp.ndarray)
+
 
 def get_slice(array, start, end):
     return array[start:end]
