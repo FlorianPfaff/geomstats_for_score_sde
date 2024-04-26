@@ -157,7 +157,7 @@ from . import linalg
 from . import random
 from . import fft
 
-from jax.numpy import array, is_complex
+from jax.numpy import array
 
 unsupported_functions = [
     'array_from_sparse',
@@ -172,12 +172,14 @@ unsupported_functions = [
 for func_name in unsupported_functions:
     exec(f"{func_name} = lambda *args, **kwargs: NotImplementedError('This function is not supported in this JAX backend.')")
 
+def is_complex(x):
+    return _jnp.iscomplexobj(x)
 
 def cast(array, dtype):
     return _jnp.asarray(array, dtype=dtype)
 
 def ravel_tril_indices(n):
-    return jnp.tril_indices(n)
+    return _jnp.tril_indices(n)
 
 def is_array(obj):
     return isinstance(obj, _jnp.ndarray)
