@@ -11,6 +11,7 @@ from geomstats.geometry.complex_manifold import ComplexManifold
 from geomstats.geometry.manifold import Manifold
 from geomstats.geometry.pullback_metric import PullbackMetric
 from geomstats.vectorization import get_batch_shape
+import jax
 
 
 class VectorSpace(Manifold, abc.ABC):
@@ -359,7 +360,7 @@ class LevelSet(Manifold, abc.ABC):
     intrinsic : bool
         Coordinates type.
     """
-
+    
     def __init__(self, intrinsic=False, shape=None, **kwargs):
         self.embedding_space = self._define_embedding_space()
 
@@ -367,6 +368,43 @@ class LevelSet(Manifold, abc.ABC):
             shape = self.embedding_space.shape
 
         super().__init__(intrinsic=intrinsic, shape=shape, **kwargs)
+
+    
+    def grad_log_heat_kernel_exp(self, x0, x, t):
+        return self.metric.log(x0, x) / gs.expand_dims(t, -1)
+
+    def grad_marginal_log_prob(self, x0, x, t, thresh, n_max):
+        cond = gs.expand_dims(t <= thresh, -1)
+        approx = self.grad_log_heat_kernel_exp(x0, x, t)
+        log_heat_kernel = lambda x0, x, s: gs.reshape(
+            self._log_heat_kernel(x0, x, s, n_max=n_max), ()
+        )
+        # TODO: use gs backend and not jax explicitly
+        logp_grad_fn = jax.grad(log_heat_kernel, argnums=1)
+        logp_grad = jax.vmap(logp_grad_fn)(x0, x, t)
+        exact = self.to_tangent(logp_grad, x)
+        return gs.where(cond, approx, exact)
+
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        state, ambiant_noise = gs.random.normal(
+            state=state, size=(n_samples, self.embedding_space.dim)
+        )
+        return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
 
     @abc.abstractmethod
     def _define_embedding_space(self):
