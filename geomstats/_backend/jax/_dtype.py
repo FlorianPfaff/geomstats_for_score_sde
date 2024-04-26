@@ -8,5 +8,20 @@ MAP_DTYPE = {
     "complex128": _jnp.complex128
 }
 
+from geomstats._backend._dtype_utils import _pre_set_default_dtype as set_default_dtype
 
+def as_dtype(value):
+    """
+    Transform string representing dtype into JAX dtype.
 
+    Parameters
+    ----------
+    value : str
+        String representing the dtype to be converted.
+
+    Returns
+    -------
+    dtype : jnp.dtype
+        JAX dtype object corresponding to the input string.
+    """
+    return MAP_DTYPE[value]

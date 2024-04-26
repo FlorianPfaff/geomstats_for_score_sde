@@ -140,6 +140,10 @@ from jax.numpy import (
 )
 from jax import vmap
 
+from ._dtype import (
+    set_default_dtype, as_dtype
+)
+
 from jax import device_get as to_numpy
 
 from jax.scipy.special import erf, gamma, polygamma
@@ -323,17 +327,6 @@ def as_dtype(array):
     A new array with the specified data type.
     """
     return _jnp.asarray(array, dtype=dtype)
-
-
-#from .._shared_numpy._common import (
-#    set_default_dtype
-#)
-from geomstats._backend._dtype_utils import (
-    _pre_set_default_dtype,
-)
-set_default_dtype = _pre_set_default_dtype(as_dtype)
-#def set_default_dtype(*args, **kwargs):
-#    raise NotImplementedError("The function set_default_dtype is not supported in this JAX backend.")
 
 
 # Check if dtype is floating-point
