@@ -143,7 +143,7 @@ from jax import vmap
 from jax import device_get as to_numpy
 
 from jax.scipy.special import erf, gamma, polygamma
-from jax.scipy.integrate import trapezoid
+from jax.scipy.integrate import trapezoid as trapz
 
 from jax.numpy import ravel as flatten
 from jax.numpy import asarray as from_numpy
