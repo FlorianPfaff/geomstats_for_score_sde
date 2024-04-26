@@ -1,6 +1,7 @@
 """Import main modules."""
 
 __version__ = "2.7.0"
+__version__ += '-score-based-sde'  # Append tag to show it's for the Riemannian score-based sde package
 
 import geomstats._backend
 import geomstats._logging
