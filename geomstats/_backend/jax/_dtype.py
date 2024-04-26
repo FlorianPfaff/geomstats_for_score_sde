@@ -27,29 +27,3 @@ def as_dtype(value):
     """
     return MAP_DTYPE[value]
 
-
-def to_ndarray(x, dtype=None):
-    """
-    Convert a JAX array to a NumPy array, ensuring that any pending operations are completed.
-
-    Parameters
-    ----------
-    x : jax.numpy.ndarray
-        The JAX array to convert.
-    dtype : data-type, optional
-        The desired data type for the NumPy array. If None, the dtype of the JAX array is used.
-
-    Returns
-    -------
-    ndarray : numpy.ndarray
-        A NumPy array representation of the input JAX array.
-    """
-    # First, ensure all JAX operations are completed
-    x = x.block_until_ready()
-    
-    # If a dtype is specified and it's different from the current dtype, cast the array
-    if dtype is not None and x.dtype != dtype:
-        x = x.astype(dtype)
-    
-    # Convert to NumPy array
-    return _np.array(x)

@@ -141,7 +141,7 @@ from jax.numpy import (
 from jax import vmap
 
 from ._dtype import (
-    set_default_dtype, as_dtype, to_ndarray
+    set_default_dtype, as_dtype
 )
 
 from jax import device_get as to_numpy
@@ -175,6 +175,34 @@ def get_default_dtype(*args, **kwargs):
 def get_default_cdtype(*args, **kwargs):
     raise NotImplementedError("The function get_default_cdtype is not supported in this JAX backend.")
 
+
+def to_ndarray(x, to_ndim, axis=0):
+    """
+    Convert an input to a JAX array and adjust its dimensionality if necessary.
+
+    Parameters
+    ----------
+    x : array-like or scalar
+        Input data, which could be a list, tuple, scalar, or an existing JAX array.
+    to_ndim : int
+        Target number of dimensions for the output array.
+    axis : int, optional
+        The axis along which a new dimension should be inserted, if needed.
+
+    Returns
+    -------
+    x : jax.numpy.ndarray
+        A JAX array with the desired number of dimensions.
+    """
+    # Ensure the input is a JAX array
+    if not isinstance(x, _jnp.ndarray):
+        x = _jnp.array(x)
+
+    # Check if we need to add a dimension
+    if x.ndim == to_ndim - 1:
+        x = _jnp.expand_dims(x, axis=axis)
+
+    return x
 
 def assignment(x, values, indices, axis=0):
     """
