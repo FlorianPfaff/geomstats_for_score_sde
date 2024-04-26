@@ -312,7 +312,7 @@ def is_array(obj):
 def get_slice(array, start, end):
     return array[start:end]
 
-def as_dtype(array, dtype):
+def as_dtype(array):
     """Change the data type of a given array.
     
     Parameters:
