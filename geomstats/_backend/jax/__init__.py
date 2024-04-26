@@ -141,7 +141,7 @@ from jax.numpy import (
 from jax import vmap
 
 from ._dtype import (
-    set_default_dtype, as_dtype
+    set_default_dtype, as_dtype, to_ndarray
 )
 
 from jax import device_get as to_numpy
