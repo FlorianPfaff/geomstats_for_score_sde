@@ -160,8 +160,6 @@ from . import fft
 from jax.numpy import array
 
 unsupported_functions = [
-    'assignment',
-    'assignment_by_sum',
     'convert_to_wider_dtype',
     'get_default_dtype',
     'get_default_cdtype',
@@ -170,6 +168,89 @@ unsupported_functions = [
 ]
 for func_name in unsupported_functions:
     exec(f"{func_name} = lambda *args, **kwargs: NotImplementedError('This function is not supported in this JAX backend.')")
+
+
+def assignment(x, values, indices, axis=0):
+    """
+    Assign values at given indices of an array using JAX.
+
+    Parameters
+    ----------
+    x: JAX array, shape=[dim]
+        Initial array.
+    values: {float, list(float)}
+        Value or list of values to be assigned.
+    indices: {int, tuple, list(int), list(tuple)}
+        Single int or tuple, or list of ints or tuples of indices where value
+        is assigned.
+        If the length of the tuples is shorter than ndim(x), values are
+        assigned to each copy along axis.
+    axis: int, optional
+        Axis along which values are assigned, if vectorized.
+
+    Returns
+    -------
+    x_new : JAX array, shape=[dim]
+        Copy of x with the values assigned at the given indices.
+    """
+    # Ensure indices and values are iterable
+    if isinstance(indices, (int, tuple)):
+        indices = [indices]
+    if not isinstance(values, list):
+        values = [values] * len(indices)
+
+    # Check if we need to raise errors for mismatch in values and indices lengths
+    if len(values) != 1 and len(values) != len(indices):
+        raise ValueError("Either one value or as many values as indices required")
+
+    # Handling assignment with index update
+    x_new = x.at[indices].set(values)
+
+    return x_new
+
+
+def assignment_by_sum(x, values, indices, axis=0):
+    """
+    Add values at given indices of a JAX array.
+
+    Parameters
+    ----------
+    x : JAX array, shape=[dim]
+        Initial array.
+    values : {float, list(float)}
+        Value or list of values to be added.
+    indices : {int, tuple, list(int), list(tuple)}
+        Single int or tuple, or list of ints or tuples of indices where value is added.
+        If the length of the tuples is shorter than ndim(x), values are
+        assigned to each copy along axis.
+    axis: int, optional
+        Axis along which values are assigned, if vectorized.
+
+    Returns
+    -------
+    x_new : JAX array, shape=[dim]
+        Copy of x with the values added at the given indices.
+
+    Notes
+    -----
+    If a single value is provided, it is added at all the indices.
+    If a list is given, it must have the same length as indices.
+    """
+    # Ensure indices and values are iterable
+    if isinstance(indices, (int, tuple)):
+        indices = [indices]
+    if not isinstance(values, list):
+        values = [values] * len(indices)
+
+    # Check if the number of values matches the number of indices, or there's exactly one value
+    if len(values) != 1 and len(values) != len(indices):
+        raise ValueError("Either one value or as many values as indices required")
+
+    # Handling addition with index update
+    for idx, val in zip(indices, values):
+        x = x.at[idx].add(val)
+
+    return x
 
 
 def array_from_sparse(indices, data, target_shape):
