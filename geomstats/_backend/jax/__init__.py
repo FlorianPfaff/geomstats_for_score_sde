@@ -175,9 +175,6 @@ def get_default_dtype(*args, **kwargs):
 def get_default_cdtype(*args, **kwargs):
     raise NotImplementedError("The function get_default_cdtype is not supported in this JAX backend.")
 
-def to_ndarray(*args, **kwargs):
-    raise NotImplementedError("The function to_ndarray is not supported in this JAX backend.")
-
 
 def assignment(x, values, indices, axis=0):
     """
