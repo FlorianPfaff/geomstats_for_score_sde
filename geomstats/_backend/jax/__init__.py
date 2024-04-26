@@ -157,20 +157,15 @@ from . import linalg
 from . import random
 from . import fft
 
-from jax.numpy import array
+from jax.numpy import array, is_complex
 
 unsupported_functions = [
     'array_from_sparse',
     'assignment',
     'assignment_by_sum',
-    'cast',
     'convert_to_wider_dtype',
     'get_default_dtype',
     'get_default_cdtype',
-    'get_slice',
-    'is_array',
-    'is_complex',
-    'ravel_tril_indices',
     'set_default_dtype',
     'to_ndarray',
 ]
@@ -178,7 +173,17 @@ for func_name in unsupported_functions:
     exec(f"{func_name} = lambda *args, **kwargs: NotImplementedError('This function is not supported in this JAX backend.')")
 
 
+def cast(array, dtype):
+    return _jnp.asarray(array, dtype=dtype)
 
+def ravel_tril_indices(n):
+    return jnp.tril_indices(n)
+
+def is_array(obj):
+    return isinstance(obj, _jnp.ndarray)
+
+def get_slice(array, start, end):
+    return array[start:end]
 
 def as_dtype(array, dtype):
     """Change the data type of a given array.
