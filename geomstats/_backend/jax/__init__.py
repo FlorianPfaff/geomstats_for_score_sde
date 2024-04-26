@@ -171,9 +171,12 @@ def get_default_dtype(*args, **kwargs):
 def get_default_cdtype(*args, **kwargs):
     raise NotImplementedError("The function get_default_cdtype is not supported in this JAX backend.")
 
+from .._shared_numpy._common import (
+    set_default_dtype
+)
 
-def set_default_dtype(*args, **kwargs):
-    raise NotImplementedError("The function set_default_dtype is not supported in this JAX backend.")
+#def set_default_dtype(*args, **kwargs):
+#    raise NotImplementedError("The function set_default_dtype is not supported in this JAX backend.")
 
 
 def to_ndarray(*args, **kwargs):
