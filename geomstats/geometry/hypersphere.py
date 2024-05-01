@@ -18,7 +18,32 @@ from geomstats.geometry.base import LevelSet
 from geomstats.geometry.euclidean import Euclidean
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 from geomstats.vectorization import get_batch_shape, repeat_out
+from geomstats.geometry.special_orthogonal import SpecialOrthogonal
 
+
+import jax
+
+
+def gegenbauer_polynomials(alpha: float, l_max: int, x):
+    """https://en.wikipedia.org/wiki/Gegenbauer_polynomials"""
+    shape = x.shape if len(x.shape) > 0 else (1,)
+    p = gs.zeros((max(l_max + 1, 2), shape[0]))
+    C_0 = gs.ones_like(x)
+    C_1 = 2 * alpha * x
+    p = p.at[0].set(C_0)
+    p = p.at[1].set(C_1)
+
+    def body_fun(n, p_val):
+        C_nm1 = p_val[n - 1]
+        C_nm2 = p_val[n - 2]
+        C_n = 1 / n * (2 * x * (n + alpha - 1) * C_nm1 - (n + 2 * alpha - 2) * C_nm2)
+        p_val = p_val.at[n].set(C_n)
+        return p_val
+
+    if l_max >= 2:
+        p = jax.lax.fori_loop(lower=2, upper=l_max + 1, body_fun=body_fun, init_val=p)
+
+    return p[: l_max + 1]
 
 class _Hypersphere(LevelSet):
     """Private class for the n-dimensional hypersphere.
@@ -49,8 +74,9 @@ class _Hypersphere(LevelSet):
             dim=dim,
             shape=(dim + 1,) if not intrinsic else (dim,),
             intrinsic=intrinsic,
-            equip=equip,
+            equip=equip
         )
+        self.isom_group = SpecialOrthogonal(n=dim + 1)
 
     @staticmethod
     def default_metric():
@@ -426,9 +452,9 @@ class _Hypersphere(LevelSet):
         samples : array-like, shape=[..., dim + 1]
             Points sampled on the hypersphere.
         """
-        return self.random_uniform(n_samples)
+        return self.random_uniform(n_samples=n_samples)
 
-    def random_uniform(self, n_samples=1):
+    def random_uniform(self, state, n_samples=1):
         """Sample in the hypersphere from the uniform distribution.
 
         Parameters
@@ -658,10 +684,157 @@ class _Hypersphere(LevelSet):
         sample = self.metric.exp(tangent_sample_at_pt, mean)
         return sample[0] if (n_samples == 1) else sample
 
+    def random_walk(self, rng, x, t):
+        if self.dim == 1:
+            # # https://stats.stackexchange.com/questions/146424/sample-from-a-von-mises-distribution-by-transforming-a-rv
+            # x = gs.arctan2(x[...,1], x[...,0])
+            # _, z = gs.random.normal(state=rng, size=[*x.shape[:-1], 1])
+            # std = gs.exp(- t / 2)
+            # y = x + std * z
+            # theta = gs.mod(y, 2 * gs.pi)
+            # theta = gs.expand_dims(theta, axis=-1)
+            # samples = gs.concatenate([gs.cos(theta), gs.sin(theta)], axis=-1)
+            rng, z = self.random_normal_tangent(
+                state=rng, base_point=x, n_samples=x.shape[0]
+            )
+            if len(t.shape) == len(x.shape) - 1:
+                t = t[..., None]
+            tangent_vector = gs.sqrt(t) * z
+            samples = self.metric.exp(tangent_vec=tangent_vector, base_point=x)
+            return samples
+        else:
+            return None
+        
+    @property
+    def volume(self):
+        half_dim = (self.dim + 1) / 2
+        return 2 * gs.pi**half_dim / math.gamma(half_dim)
+
+    def _log_heat_kernel(self, x0, x, t, n_max):
+        """
+        log p_t(x, y) = \sum^\infty_n e^{-t \lambda_n} \psi_n(x) \psi_n(y)
+        = \sum^\infty_n e^{-n(n+1)t} \frac{2n+d-1}{d-1} \frac{1}{A_{\mathbb{S}^n}} \mathcal{C}_n^{(d-1)/2}(x \cdot y
+        """
+        # NOTE: Should we rely on the Russian roulette estimator even though the log would bias it?
+        if len(t.shape) == len(x.shape):
+            t = t[..., 0]
+        t = t / 2  # NOTE: to match random walk
+        d = self.dim
+        if d == 1:
+            n = gs.expand_dims(gs.arange(-n_max, n_max + 1), axis=-1)
+            t = gs.expand_dims(t, axis=0)
+            sigma_squared = t  # NOTE: factor 2 is needed empirically to match kernel?
+            cos_theta = gs.sum(x0 * x, axis=-1)
+            theta = gs.arccos(cos_theta)
+            coeffs = gs.exp(-gs.power(theta + 2 * math.pi * n, 2) / 2 / sigma_squared)
+            prob = gs.sum(coeffs, axis=0)
+            prob = prob / gs.sqrt(2 * math.pi * sigma_squared[0])
+        else:
+            n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
+            t = gs.expand_dims(t, axis=0)
+            coeffs = (
+                gs.exp(-n * (n + 1) * t)
+                * (2 * n + d - 1)
+                / (d - 1)
+                / self.volume
+            )
+            inner_prod = gs.sum(x0 * x, axis=-1)
+            cos_theta = gs.clip(inner_prod, -1.0, 1.0)
+            P_n = gegenbauer_polynomials(
+                alpha=(self.dim - 1) / 2, l_max=n_max, x=cos_theta
+            )
+            prob = gs.sum(coeffs * P_n, axis=0)
+        return gs.log(prob)
+
+    def div_free_generators(self, x):
+        """
+        f_ij=x^i partial_j - x^j partial_i for 0 <= i < j <= dim
+        Returns
+        -------
+        generators :
+            generators induced by isometry group lie algebra basis
+            shape=[batch_size, dim+1, dim(SO(dim+1))].
+        """
+        if self.dim == 1:
+            rot_mat = gs.array([[0, -1], [1, 0]])
+            return rot_mat @ x[..., None]
+        elif self.dim == 2:
+            zeros = gs.zeros((*x.shape[:-1], 1))
+            f_01 = gs.expand_dims(
+                gs.concatenate([-x[..., [1]], x[..., [0]], zeros], axis=-1), axis=-1
+            )
+            f_02 = gs.expand_dims(
+                gs.concatenate([-x[..., [2]], zeros, x[..., [0]]], axis=-1), axis=-1
+            )
+            f_12 = gs.expand_dims(
+                gs.concatenate([zeros, -x[..., [2]], x[..., [1]]], axis=-1), axis=-1
+            )
+            generators = gs.concatenate([f_01, f_02, f_12], axis=-1)
+            return generators
+        else:
+            raise NotImplementedError()
+
+    def eigen_generators(self, x):
+        """
+        f_i(x) = e_i - <x, e_i> x  for 1 <= i <= dim + 1
+        Returns
+        -------
+        generators :
+            gradient of laplacian eigenfunctions with eigenvalue=1
+            shape=[batch_size, dim+1, dim+1].
+        """
+        ei = gs.expand_dims(gs.eye(self.embedding_space.dim), 0)
+        # sq_norm = gs.sum(x ** 2, axis=-1, keepdims=True)
+        coef = gs.einsum("...d,...dn->...n", x, ei)
+        coef = coef  # / sq_norm
+        generators = ei - gs.einsum("...n,...d->...dn", coef, x)
+        return generators
+
+    def stereographic_projection(self, x):
+        xi = x[..., [0]]
+        x = x[..., 1:]
+        out = x / (1 + gs.sqrt(self.c) * xi + gs.atol)
+        return out
+
+    def inv_stereographic_projection(self, y):
+        y_norm_sq = gs.sum(gs.power(y, 2), -1, keepdims=True)
+        denom = 1 + self.c * y_norm_sq
+        xi = (1 - self.c * y_norm_sq) / denom / gs.sqrt(self.c)
+        x = 2 * y / denom
+        out = gs.concatenate([xi, x], -1)
+        return out
+
+    def inv_stereographic_projection_logdet(self, y):
+        y_norm_sq = gs.sum(gs.power(y, 2), -1)
+        out = (self.dim) * (math.log(2) - gs.log1p(self.c * y_norm_sq))
+        return out
+
+    @property
+    def log_volume(self):
+        """log area of n-sphere https://en.wikipedia.org/wiki/N-sphere#Closed_forms"""
+        half_dim = (self.dim + 1) / 2
+        return math.log(2) + half_dim * math.log(math.pi) - math.lgamma(half_dim)
+
+
+    def logdetexp(self, x, y, is_vector=False):
+        return self.metric.logdetexp(x, y, is_vector)
+
+    def hat(self, point):
+        return point
+
+    def vee(self, point):
+        return point
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        return self.metric.exp(tangent_vec, base_point, **kwargs)
+
+    def log(self, point, base_point, **kwargs):
+        return self.metric.log(point, base_point, **kwargs)
 
 class HypersphereMetric(RiemannianMetric):
     """Class for the Hypersphere Metric."""
-
+    
+    
     def metric_matrix(self, base_point=None):
         """Metric matrix at the tangent space at a base point.
 
