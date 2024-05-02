@@ -1,5 +1,4 @@
 import jax.numpy as _jnp
-import numpy as _np
 from geomstats._backend._dtype_utils import _pre_set_default_dtype as set_default_dtype
 
 # Mapping of string dtype representations to JAX dtypes
